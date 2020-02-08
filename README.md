@@ -1,5 +1,21 @@
 # TLS-N IMPLEMENTATION FOR OPENSSL
 
+This represents the implementation of TLS-N for OpenSSL written by me (Fabio De Rubeis). TLS-N is a protocol for the non-repudiation of TLS sessions developed at ETH Zurich [1]. The description of tls-n can also be found in the unpublished internet-draft tlsn.txt written by me with the help of H.Ritzdorf and K.Wust. The code in this repository has been forked from the OpenSSL project, so it belongs almost totally to that project [2]. The only files that were written by me are:
+
+./tlsn.txt
+./ssl/tls13_tlsn.c
+./test/tls13tlsntest.c
+./test/recipes/90-test_tls13tlsn.t
+./doc/man3/SSL_CTX_set_tlsn_extension_client.pod
+
+I also did some edits in some other files in the repository to make the code include and support my additions.
+
+
+[1] https://ethz.ch/content/dam/ethz/special-interest/infk/inst-infsec/system-security-group-dam/research/publications/pub2018/ndss2018ritzdorf.pdf
+[2] https://github.com/openssl/openssl
+
+## THE CODE
+
 Please find the user-available functions documented at *doc/man3/SSL_CTX_set_tlsn_extension_client.pod*
 
 There are some important functions that are also worth to be mentioned here:

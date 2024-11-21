@@ -566,6 +566,74 @@ static int ssl_check_allowed_versions(int min_version, int max_version)
     return 1;
 }
 
+static void free_tlsn_buffers(SSL *s){
+
+    unsigned int i;
+
+    /*free the buffer containing the proof */
+    if (s->ext.tlsn_proof != NULL){
+        OPENSSL_free(s->ext.tlsn_proof);
+        s->ext.tlsn_proof = NULL;
+    }
+    /*free the buffers of the received messages */
+    for(i=0; i < s->ext.tlsn_client_recv_len; i++){
+        if (s->ext.tlsn_client_recv[i].plaintext != NULL){
+            OPENSSL_free( s->ext.tlsn_client_recv[i].plaintext);
+	    s->ext.tlsn_client_recv[i].plaintext = NULL;
+        }
+
+        if (s->ext.tlsn_client_recv[i].salt_secret != NULL){
+            OPENSSL_free( s->ext.tlsn_client_recv[i].salt_secret);
+	    s->ext.tlsn_client_recv[i].salt_secret = NULL;
+        }
+       
+        if (s->ext.tlsn_client_recv[i].merkle_hash != NULL){
+            OPENSSL_free( s->ext.tlsn_client_recv[i].merkle_hash);
+	    s->ext.tlsn_client_recv[i].merkle_hash = NULL;
+        }
+    } 
+   
+     /*free the buffers of the sent messages */
+    for(i=0; i < s->ext.tlsn_client_sent_len; i++){
+        if (s->ext.tlsn_client_sent[i].plaintext != NULL){
+            OPENSSL_free( s->ext.tlsn_client_sent[i].plaintext);
+	    s->ext.tlsn_client_sent[i].plaintext = NULL;
+        }
+
+        if (s->ext.tlsn_client_sent[i].salt_secret != NULL){
+            OPENSSL_free( s->ext.tlsn_client_sent[i].salt_secret);
+	    s->ext.tlsn_client_sent[i].salt_secret = NULL;
+        }
+       
+        if (s->ext.tlsn_client_sent[i].merkle_hash != NULL){
+            OPENSSL_free( s->ext.tlsn_client_sent[i].merkle_hash);
+	    s->ext.tlsn_client_sent[i].merkle_hash = NULL;
+        }
+    }
+
+    if (s->ext.tlsn_client_recv != NULL){
+        OPENSSL_free(s->ext.tlsn_client_recv);
+        s->ext.tlsn_client_recv = NULL;
+    }
+    if (s->ext.tlsn_client_sent != NULL){
+        OPENSSL_free(s->ext.tlsn_client_sent);
+        s->ext.tlsn_client_sent = NULL;
+    }
+    
+    if (s->ext.tlsn_ordvec != NULL){
+        OPENSSL_free(s->ext.tlsn_ordvec);
+        s->ext.tlsn_ordvec = NULL;
+    }
+    if (s->ext.tlsn_proof_ordvec != NULL){
+        OPENSSL_free(s->ext.tlsn_proof_ordvec);
+        s->ext.tlsn_proof_ordvec = NULL;
+    }
+    
+    if (s->ext.tlsn_final_hash != NULL){
+        OPENSSL_free(s->ext.tlsn_final_hash);
+        s->ext.tlsn_final_hash = NULL;
+    }
+}
 
 static void clear_ciphers(SSL *s)
 {
@@ -789,6 +857,30 @@ SSL *SSL_new(SSL_CTX *ctx)
 #ifndef OPENSSL_NO_NEXTPROTONEG
     s->ext.npn = NULL;
 #endif
+
+
+    /*TLS-N variables settings*/
+    s->ext.negotiated=0;
+    s->ext.chunk_size=ctx->ext.chunk_size;
+    s->ext.salt_size=ctx->ext.salt_size;
+    s->ext.tlsn_version=ctx->ext.tlsn_version;
+    s->ext.tlsn_final_hash = NULL;
+    s->ext.tlsn_ordvec = NULL;
+    s->ext.tlsn_ordvec_len = 0; 
+    s->ext.tlsn_proof_ordvec = NULL;
+    s->ext.tlsn_proof_ordvec_len = 0;
+    s->ext.tlsn_exchanged_ordvec = 0;
+    s->ext.tlsn_client_sent = NULL; 
+    s->ext.tlsn_client_recv = NULL; 
+    s->ext.tlsn_client_sent_len = 0; 
+    s->ext.tlsn_client_recv_len = 0; 
+    s->ext.tlsn_timestamp_start = 0;
+    s->ext.request_option = INCLUDE_CERT_CHAIN;
+    s->ext.tlsn_sent_responses = 0;
+    s->ext.tlsn_received_responses = 0;
+    s->ext.tlsn_proof = NULL;
+    s->ext.tlsn_proof_len = 0;
+    bzero(s->ext.tlsn_last_seq_num, SEQ_NUM_SIZE);
 
     if (s->ctx->ext.alpn) {
         s->ext.alpn = OPENSSL_malloc(s->ctx->ext.alpn_len);
@@ -1186,6 +1278,8 @@ void SSL_free(SSL *s)
     OPENSSL_free(s->ext.alpn);
     OPENSSL_free(s->ext.tls13_cookie);
     OPENSSL_free(s->clienthello);
+
+    free_tlsn_buffers(s);
 
     sk_X509_NAME_pop_free(s->ca_names, X509_NAME_free);
 
@@ -2978,6 +3072,10 @@ SSL_CTX *SSL_CTX_new(const SSL_METHOD *meth)
     ret->options |= SSL_OP_NO_COMPRESSION | SSL_OP_ENABLE_MIDDLEBOX_COMPAT;
 
     ret->ext.status_type = TLSEXT_STATUSTYPE_nothing;
+
+    ret->ext.salt_size=DEFAULT_SALT_SIZE;
+    ret->ext.chunk_size=DEFAULT_CHUNK_SIZE;
+    ret->ext.tlsn_version=DEFAULT_TLSN_VERSION;
 
     /*
      * Default max early data is a fully loaded single record. Could be split

@@ -973,6 +973,10 @@ struct ssl_ctx_st {
         void *npn_select_cb_arg;
 # endif
 
+	 //TLS-N variables
+        size_t chunk_size;
+        size_t salt_size;
+        uint8_t tlsn_version;
 
     } ext;
 
@@ -1287,6 +1291,45 @@ struct ssl_st {
          */
         uint8_t max_fragment_len_mode;
 
+        /*TLS-N variables */
+
+        size_t chunk_size;
+        size_t salt_size;
+        uint8_t tlsn_version;
+	    int negotiated;
+        unsigned char *tlsn_final_hash;
+
+        /* Every time a message is exchanged, each of the peers update their tls_ordvec.
+         * The client stores all the received ordering vectors in tlsn_proof_ordvec,
+         * which is the vector used for building the proof. Before building the proof, the
+         * client compares tlsn_ordvec and tlsn_proof_ordvec to verify that the
+         * server has not sent an intentionally forged ordering vector.
+         */
+        unsigned char* tlsn_ordvec;
+        size_t tlsn_ordvec_len; /*note: it indicates how many BITS long is the vector */
+        uint32_t tlsn_exchanged_ordvec; /*it increases every time an ord vector is sent or received */
+        unsigned char* tlsn_proof_ordvec;
+        size_t tlsn_proof_ordvec_len; /*note: it indicates how many BITS long is the vector */
+        
+        /* array of the sent records */
+        TLSN_CLIENT_RECORDING* tlsn_client_sent;
+        size_t tlsn_client_sent_len;
+        
+        /* array of the received records */
+        TLSN_CLIENT_RECORDING* tlsn_client_recv;
+        size_t tlsn_client_recv_len;
+        
+        uint64_t tlsn_timestamp_start;
+        int request_option;
+        int tlsn_sent_responses;
+        int tlsn_received_responses;
+        unsigned char* tlsn_proof; /* Where the client stores the proof after building it */
+        uint64_t tlsn_proof_len;
+
+        /*temporary workaround for preventing
+         * double processing of same packet
+         */
+        unsigned char tlsn_last_seq_num[SEQ_NUM_SIZE];
    } ext;
 
     /*
@@ -1582,6 +1625,23 @@ typedef struct ssl3_state_st {
 # endif
 
 } SSL3_STATE;
+
+/* TLS_N functions and constants */
+int SSL_add_record_to_evidence(SSL *s, const unsigned char *buf, size_t buf_length, uint8_t received);
+int tlsn_handle_message(SSL *s, unsigned char *data, size_t length);
+int tlsn_send_ord_vector(SSL *s);
+
+
+#define DEFAULT_SALT_SIZE MINIMUM_SALT_SIZE
+#define DEFAULT_CHUNK_SIZE SSL3_RT_MAX_PLAIN_LENGTH
+#define DEFAULT_TLSN_VERSION 0
+
+#define TLSN_MESSAGE_TYPE_SIZE 1
+typedef enum {
+    tlsn_message_type_request = 1,
+    tlsn_message_type_response = 2,
+    tlsn_message_type_ordering_vector = 3
+}TLS_N_MESSAGE_TYPE;
 
 /* DTLS structures */
 

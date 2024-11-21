@@ -340,6 +340,7 @@ int ssl3_write_bytes(SSL *s, int type, const void *buf_, size_t len,
     const unsigned char *buf = buf_;
     size_t tot;
     size_t n, max_send_fragment, split_send_fragment, maxpipes;
+    uint32_t prev_exchanged_ord_vect = s->ext.tlsn_exchanged_ordvec;
 #if !defined(OPENSSL_NO_MULTIBLOCK) && EVP_CIPH_FLAG_TLS1_1_MULTIBLOCK
     size_t nw;
 #endif
@@ -633,6 +634,15 @@ int ssl3_write_bytes(SSL *s, int type, const void *buf_, size_t len,
                 ssl3_release_write_buffer(s);
 
             *written = tot + tmpwrit;
+
+            /* The increase of tlsn_exchanged_ordvec is a signal that we need to send
+             * the ordering vector at this point.
+             */
+            if (s->ext.tlsn_exchanged_ordvec > prev_exchanged_ord_vect
+                    && s->server){
+                if(tlsn_send_ord_vector(s) <= 0)
+                    return -1;
+            }
 
             return 1;
         }
@@ -1144,6 +1154,13 @@ int ssl3_write_pending(SSL *s, int type, const unsigned char *buf, size_t len,
             if (i >= 0)
                 tmpwrit = i;
 
+                    /*TLS-N adds a record to the evidence*/
+	    if(memcmp(s->ext.tlsn_last_seq_num, s->rlayer.write_sequence, SEQ_NUM_SIZE) != 0
+	            && (type == SSL3_RT_APPLICATION_DATA)
+	            && (SSL_get_negotiated(s) == 1))
+	        if(SSL_add_record_to_evidence(s,buf, (size_t)len,0) <= 0)
+		        return 0;
+
         } else {
             SSLfatal(s, SSL_AD_INTERNAL_ERROR, SSL_F_SSL3_WRITE_PENDING,
                      SSL_R_BIO_NOT_SET);
@@ -1210,6 +1227,7 @@ int ssl3_read_bytes(SSL *s, int type, int *recvd_type, unsigned char *buf,
     SSL3_RECORD *rr;
     SSL3_BUFFER *rbuf;
     void (*cb) (const SSL *ssl, int type2, int val) = NULL;
+    unsigned char *tlsn_data = NULL;
 
     rbuf = &s->rlayer.rbuf;
 
@@ -1419,7 +1437,13 @@ int ssl3_read_bytes(SSL *s, int type, int *recvd_type, unsigned char *buf,
             && SSL3_BUFFER_get_left(rbuf) == 0)
             ssl3_release_read_buffer(s);
         *readbytes = totalbytes;
-        
+
+        /*If TLS-N is enabled, a record is added to the evidence */
+        if ((type == SSL3_RT_APPLICATION_DATA) && (SSL_get_negotiated(s) == 1))
+        if(SSL_add_record_to_evidence(s, buf - *readbytes, (size_t)(*readbytes), 1) <= 0)
+            return 0;
+
+    
         return 1;
     }
 
@@ -1607,6 +1631,37 @@ int ssl3_read_bytes(SSL *s, int type, int *recvd_type, unsigned char *buf,
         goto start;
     }
 
+    /* TLS-N message handling */
+    if (SSL3_RECORD_get_type(rr) == SSL3_RT_TLSN_MESSAGE){
+         
+       /*tlsn routine */
+        tlsn_data = (unsigned char *)malloc(SSL3_RECORD_get_length(rr));
+        if (tlsn_data == NULL)
+            return -1;
+        memcpy(tlsn_data, SSL3_RECORD_get_data(rr), SSL3_RECORD_get_length(rr));
+
+        if (tlsn_handle_message(s, tlsn_data, SSL3_RECORD_get_length(rr)) <= 0){
+            free(tlsn_data);
+            SSL3_RECORD_set_read(rr);
+            return -1;    
+        }
+
+        free(tlsn_data);
+        tlsn_data = NULL;
+        SSL3_RECORD_set_read(rr);
+
+        /* Reading the ordering vector message does not require
+         *  an active read call of the client */
+        if (!s->server && *SSL3_RECORD_get_data(rr)==tlsn_message_type_ordering_vector)
+            goto start;
+
+        if(s->server){
+            goto start;
+        }else{
+            return 0;
+        }
+    }
+
     if (s->shutdown & SSL_SENT_SHUTDOWN) { /* but we have not received a
                                             * shutdown */
         s->rwstate = SSL_NOTHING;
@@ -1683,6 +1738,7 @@ int ssl3_read_bytes(SSL *s, int type, int *recvd_type, unsigned char *buf,
     case SSL3_RT_CHANGE_CIPHER_SPEC:
     case SSL3_RT_ALERT:
     case SSL3_RT_HANDSHAKE:
+    case SSL3_RT_TLSN_MESSAGE:
         /*
          * we already handled all of these, with the possible exception of
          * SSL3_RT_HANDSHAKE when ossl_statem_get_in_handshake(s) is true, but

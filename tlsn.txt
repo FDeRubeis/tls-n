@@ -1,0 +1,2016 @@
+
+
+
+
+Internet Engineering Task Force                              H. Ritzdorf
+Internet-Draft                                                  K. Wuest
+Intended status: Informational                              F. De Rubeis
+Expires: February 4, 2019                                     ETH Zurich
+                                                          August 3, 2018
+
+
+               TLS-N: a TLS extension for non-repudiation
+                   draft-ritzdorf-tls-n-extension-00
+
+Abstract
+
+   TLS-N is an extension of the TLS 1.3 protocol that guarantees the
+   non-repudiation of the content of the session.
+
+   In a TLS-N session, one of the peer signs the session's content and
+   sends the signature to the other peer.  A third party can be informed
+   about the session content and verify the truthfulness of this
+   information parsing the signature.  Thus, none of the parties can
+   deny the content of the session.
+
+   For the TLS-N protocol to work, the third party must trust the
+   signer.
+
+Status of This Memo
+
+   This Internet-Draft is submitted in full conformance with the
+   provisions of BCP 78 and BCP 79.
+
+   Internet-Drafts are working documents of the Internet Engineering
+   Task Force (IETF).  Note that other groups may also distribute
+   working documents as Internet-Drafts.  The list of current Internet-
+   Drafts is at http://datatracker.ietf.org/drafts/current/.
+
+   Internet-Drafts are draft documents valid for a maximum of six months
+   and may be updated, replaced, or obsoleted by other documents at any
+   time.  It is inappropriate to use Internet-Drafts as reference
+   material or to cite them other than as "work in progress."
+
+   This Internet-Draft will expire on February 4, 2019.
+
+Copyright Notice
+
+   Copyright (c) 2018 IETF Trust and the persons identified as the
+   document authors.  All rights reserved.
+
+   This document is subject to BCP 78 and the IETF Trust's Legal
+   Provisions Relating to IETF Documents
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019                [Page 1]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+   (http://trustee.ietf.org/license-info) in effect on the date of
+   publication of this document.  Please review these documents
+   carefully, as they describe your rights and restrictions with respect
+   to this document.  Code Components extracted from this document must
+   include Simplified BSD License text as described in Section 4.e of
+   the Trust Legal Provisions and are provided without warranty as
+   described in the Simplified BSD License.
+
+Table of Contents
+
+   1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   3
+     1.1.  Requirements Language . . . . . . . . . . . . . . . . . .   5
+     1.2.  Presentation Language . . . . . . . . . . . . . . . . . .   5
+   2.  The TLS-N extension . . . . . . . . . . . . . . . . . . . . .   6
+     2.1.  Parameter Negotiation . . . . . . . . . . . . . . . . . .   8
+     2.2.  The tlsn-request  . . . . . . . . . . . . . . . . . . . .   8
+     2.3.  The tlsn-response . . . . . . . . . . . . . . . . . . . .   8
+       2.3.1.  The evidence  . . . . . . . . . . . . . . . . . . . .   8
+         2.3.1.1.  The Final Hash  . . . . . . . . . . . . . . . . .   9
+         2.3.1.2.  Timestamps  . . . . . . . . . . . . . . . . . . .  14
+         2.3.1.3.  Evidence Conclusion . . . . . . . . . . . . . . .  14
+       2.3.2.  Ordering Vector . . . . . . . . . . . . . . . . . . .  15
+       2.3.3.  Building the tlsn-response  . . . . . . . . . . . . .  15
+     2.4.  The tlsn-ord_vector and the ordering vector information .  16
+     2.5.  Proof Generation and Verification . . . . . . . . . . . .  17
+       2.5.1.  One record proof  . . . . . . . . . . . . . . . . . .  17
+       2.5.2.  Multiple records proof  . . . . . . . . . . . . . . .  18
+       2.5.3.  Hiding chunks . . . . . . . . . . . . . . . . . . . .  18
+   3.  The tlsn-request generation . . . . . . . . . . . . . . . . .  19
+   4.  The tlsn-response generation  . . . . . . . . . . . . . . . .  19
+     4.1.  Salt secret generation  . . . . . . . . . . . . . . . . .  19
+     4.2.  Salt Tree generation  . . . . . . . . . . . . . . . . . .  20
+     4.3.  Merkle Tree generation  . . . . . . . . . . . . . . . . .  21
+     4.4.  Final Hash generation . . . . . . . . . . . . . . . . . .  22
+     4.5.  Timestamps generation . . . . . . . . . . . . . . . . . .  22
+     4.6.  The hash algorithms . . . . . . . . . . . . . . . . . . .  22
+     4.7.  Evidence  . . . . . . . . . . . . . . . . . . . . . . . .  22
+     4.8.  Ordering Vector management  . . . . . . . . . . . . . . .  23
+     4.9.  Building the tlsn-response  . . . . . . . . . . . . . . .  24
+   5.  The tlsn-ord_vector generation  . . . . . . . . . . . . . . .  24
+   6.  The proof generation  . . . . . . . . . . . . . . . . . . . .  25
+     6.1.  First part  . . . . . . . . . . . . . . . . . . . . . . .  25
+     6.2.  Second Part . . . . . . . . . . . . . . . . . . . . . . .  25
+       6.2.1.  The hash chain ProofNode  . . . . . . . . . . . . . .  27
+       6.2.2.  The plaintext ProofNode . . . . . . . . . . . . . . .  27
+       6.2.3.  The Merkle hash ProofNode . . . . . . . . . . . . . .  27
+       6.2.4.  The hidden plaintext ProofNode  . . . . . . . . . . .  27
+         6.2.4.1.  The hashes and the salts  . . . . . . . . . . . .  28
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019                [Page 2]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+         6.2.4.2.  The hashes and the salts in the proof . . . . . .  29
+         6.2.4.3.  Completing the hidden plaintext node  . . . . . .  30
+       6.2.5.  Completing the second part  . . . . . . . . . . . . .  31
+     6.3.  Completing the proof  . . . . . . . . . . . . . . . . . .  32
+   7.  The proof verification  . . . . . . . . . . . . . . . . . . .  32
+   8.  Acknowledgements  . . . . . . . . . . . . . . . . . . . . . .  32
+   9.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .  32
+   10. Security Considerations . . . . . . . . . . . . . . . . . . .  33
+     10.1.  Trust assumptions  . . . . . . . . . . . . . . . . . . .  33
+     10.2.  Security properties  . . . . . . . . . . . . . . . . . .  33
+     10.3.  Adversarial model  . . . . . . . . . . . . . . . . . . .  34
+     10.4.  Security analysis  . . . . . . . . . . . . . . . . . . .  34
+   11. References  . . . . . . . . . . . . . . . . . . . . . . . . .  35
+     11.1.  Normative References . . . . . . . . . . . . . . . . . .  35
+     11.2.  Informative References . . . . . . . . . . . . . . . . .  36
+   Appendix A.  Title of the appendix  . . . . . . . . . . . . . . .  36
+   Authors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  36
+
+1.  Introduction
+
+   TLS 1.3 is an Internet protocol that guarantees authentication,
+   confidentiality and integrity of the content [I-D.ietf-tls-tls13].
+   For this reason, two TLS peers can exchange messages knowing that
+   their conversation is private and the client always knows the
+   identity of the server.  TLS, however, does not provide non-
+   repudiation.  This means that, when the TLS connection is over, any
+   of the peers can deny having sent or received any message.  This can
+   be a problem in certain scenarios.
+
+   Suppose that, in a TLS connection, a peer A exchanges some messages
+   with a peer B, and that the peer B wants to inform a third party that
+   this happened.  B can send the session's plaintext to the third
+   party, but the third party has no possibility to verify that the
+   exchange of messages really happened and that the data were not
+   falsified by B.  A can always deny having sent or received those
+   messages.
+
+   In the TLS-N protocol, there are three parties: the Generator, the
+   Requester and the Verfier.  The TLS-N session is started by the
+   Generator (tipically the server of the underlying TLS session) and
+   the Requester (tipically the client).  They act according to the
+   following description:
+
+   1.  At any point during the connection, the Requester can ask for the
+       evidence, which is fundamentally the signature of the session's
+       plaintext with the Generator's private key.
+
+
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019                [Page 3]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+   2.  Upon receiving the request, the Generator generates the evidence
+       and sends it to the Requester.
+
+   3.  The Requester builds the proof, which is essentially made of the
+       evidence, the session's plaintext and the Generator's certificate
+       chain.
+
+   4.  The Requester shows the proof to the Verifier.
+
+   5.  The Verifier, finally, reads the plaintext and is able to verify
+       that the exchange of messages happened with the Generator by
+       verifying the evidence with the Generator's public key.  Such a
+       key is, of course, found in the Generator's certificate.
+
+                        +---------------+
+                        |               | trusts  +----+
+                        |  verifier     +------>  | CA |
+              +-------> |  (third part) |         +--+-+
+              |         |               |            |
+        sends |         +-------+-------+            |
+        proof |                 |                    |
+              |           learns|about          signs|
+              |                 |                    |
+              |                 v                    v
+              |
+        +-----+-----+       messages        +-----------+
+        |           |  <----------------->  |           |
+        | Requester |                       | Generator |
+   +----+ (client)  |                       | (server)  |
+   |    |           |  <-----------------+  |           |
+   |    +-----------+    sends evidence     +-----------+
+   |
+   |          ^
+   |          |
+   +----------+
+    generates
+    proof
+
+                                 Figure 1
+
+   Naturally, when the Verifier is given the proof, it examines the
+   whole certificate chain and checks that the CA belongs to its trust
+   store.  If not, the proof verification fails because it is not
+   possible to ascertain the identity of the Generator.  This is the
+   only trust requirement for TLS-N.  For this reason, TLS-N can work
+   with the trust scheme of TLS 1.3 [I-D.ietf-tls-tls13].
+
+
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019                [Page 4]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+   TLS-N also allows the Requester to choose and hide pieces of the
+   exchanged messages (for example, sensitive data like passwords or
+   other personal information).  In fact, when generating the proof, the
+   Requester can selectively drop parts of the session's plaintext.  The
+   Verifier will still be able to verify the proof and it will also be
+   able to see where the missing pieces are.
+
+   When the evidence is generated, every message is divided into chunks
+   (the size of the chunks is fixed and chosen at the beginning of the
+   session by the Requester).  After the evidence is received, the
+   Requester can choose to hide one or more of those chunks and build a
+   verifiable proof.  The selection of the chunk size is really
+   important, because it determines how fine the hiding granularity will
+   be.  It is important to notice that the Requester chooses which
+   chunks will be hidden during the generation of the proof, so after
+   the evidence is received.  The Generator has no control or knowledge
+   about the selection of the hidden chunks.
+
+   When evaluating the TLS-N extension, one must consider:
+
+   o  The Requester can be malicious, specifically when it tries to
+      forge the proof (in particular, when forging the plaintext).
+
+   o  The Verifier can be malicious, specifically when it tries to find
+      information about the hidden pieces.
+
+   The evidence also includes two timestamps showing when the exchange
+   of messages started and when it finished.
+
+   In this draft, Section 2 will describe in detail the cryptographic
+   scheme that allows the TLS-N extension to work securely.  Section 3
+   will explain how the evidence request is generated.  Section 4 will
+   show how the evidence is formed and how it is sent to the Requester.
+   Section 6 will do the same for the proof.  Section 7 will explain how
+   the proof verification is performed.
+
+1.1.  Requirements Language
+
+   The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+   "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+   document are to be interpreted as described in RFC 2119 [RFC2119].
+
+1.2.  Presentation Language
+
+   This document defines protocol structures using the same conventions
+   and presentation language as defined in Section 3 of I-D.ietf-tls-
+   tls13 [I-D.ietf-tls-tls13].
+
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019                [Page 5]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+   The documents also makes use of the notation presented below:
+
+      ceil(x) represents the smallest integer larger than or equal to
+      the real number x.
+
+      logb2(x) represents the logarithm base 2 of x.
+
+      sizeof(x) represents the dimensions of x in bytes.
+
+   In this document, the word "plaintext" indicates the plaintext of a
+   single record.  In a TLS session multiple plaintexts are exchanged.
+   The "session's plaintext" is the set of all the plaintexts exchanged
+   during the session.
+
+2.  The TLS-N extension
+
+   A TLS-N connection always takes the following steps:
+
+   1.  During the handshake, the parameters of the extension are
+       negotiated.
+
+   2.  The peers exchange messages.
+
+   3.  The Requester asks for the evidence with a message called "tlsn-
+       request".
+
+   4.  The Generator sends the evidence in a message called "tlsn-
+       response".
+
+   5.  The Requester uses the evidence to build the proof.
+
+   6.  The Requester sends the proof to the Verifier (no special message
+       is defined for that, application data messages can be used).
+
+   7.  The Verifier verifies the proof.
+
+   The "tlsn-request" and the "tlsn-response" messages belong to a new
+   record type: the "TLS-N message".  This type is added by the TLS-N
+   extension to the already existing TLS record types (described in
+   section 7 of I-D.ietf-tls-tls13 [I-D.ietf-tls-tls13]).  The TLS-N
+   message type is represented by the number TBD.
+
+
+
+
+
+
+
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019                [Page 6]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+   enum {                                enum {
+       invalid(0),                           invalid(0),           ,
+       change_cipher_spec(20),               change_cipher_spec(20)
+       alert(21),                +---->      alert(21),
+       handshake(22),                        handshake(22),
+       application_data(23),                 application_data(23),
+       (255)                                 TLS-N_message(TBD),
+   } ContentType;                            (255)
+                                         } ContentType;
+
+
+   For every record of application data exchanged after the handshake,
+   the plaintext is taken and included in the evidence.  For every
+   plaintext, the Requester can select some parts and not include them
+   in the proof.  In order to do so, the Requester divides the
+   plaintext's bytes in chunks of the same length and decides which ones
+   will be excluded.  The length of the chunks is agreed with the
+   Generator at the beginning of the TLS-N session and it takes the name
+   of ChunkSize.  So, during the proof generation, the Requester will
+   divide every plaintext into chunks of size ChunkSize (if the
+   plaintext's size is not a multiple of ChunkSize there is no problem,
+   the last chunk can be shorter) and choose the ones to hide.  A
+   smaller ChunkSize can be convenient, because it allows a finer
+   grained selection, but it slows down the generation of the evidence
+   and the proof affecting the performance of TLS-N.
+
+   As previously explained, selecting the ChunkSize is really important.
+   Suppose, for example, that a Requester wants to hide a three-
+   characters word (each character is one byte long) from a text.  It
+   might look reasonable to choose a ChunkSize of three.  However, it
+   might happen that the word is not contained in one single chunk.  The
+   first two characters, for example, might belong to one chunk and the
+   third character to the next one.  The Requester, in fact, has no
+   control over the chunk division of the text, since for every
+   exchanged record the first chunk starts at the beginning of the
+   record's plaintext (see Section 2.3).  This means that, in the
+   mentioned example, to hide the intended word the Requester might need
+   to hide two chunks.  Thus, not only the intended word will be hidden,
+   but also some data around it.  This can be an issue if those data are
+   important and cannot be hidden.  In this case, the Requester could,
+   for example, choose a ChunkSize of 1 if it wants to hide only the
+   intended word.  That is why it is important to choose an appropriate
+   ChunkSize that balances fine granularity and good performance.
+
+   Note: the ChunkSize MUST be agreed at the beginning of the TLS-N
+   session because it also affects the generation of the evidence.
+
+   TLS-N_message value is assigned by IANA as described in Section 9
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019                [Page 7]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+2.1.  Parameter Negotiation
+
+   At the beginning of every TLS-N session, three parameters MUST be
+   negotiated:
+
+   o  The ChunkSize: it can go from 1 to the maximum plaintext length.
+      It expresses the length of the record's plaintext chunks in bytes.
+      The Requester can choose not to divide the plaintext into chunks
+      and during the proof it will only be able to exclude or include
+      entire record's plaintexts.  This choice is equivalent to set the
+      ChunkSize to the maximum record plaintext length.
+
+   o  The SaltSize: the evidence generation requires the use of random
+      salts for hash computation.  The SaltSize expresses the length of
+      a salt in bytes.  For security reasons, a minimum of 16 is
+      required.
+
+   o  TLS-N version: at the time of writing, there is only one TLS-N
+      version, and it is the one described in this draft.
+
+2.2.  The tlsn-request
+
+   At any time, during the session, the Requester can request the
+   evidence.  This is done sending the tlsn-request message.  Upon
+   receiving this message, the Generator MUST generate the evidence
+   basing on the application data records exchanged so far.  Then, it
+   sends the evidence in the tlsn-response message.
+
+2.3.  The tlsn-response
+
+   The tlsn-response is sent by the Generator after receiving the tlsn-
+   request and it contains the evidence and some information about the
+   TLS-N session and the messages exchanged.
+
+2.3.1.  The evidence
+
+   The evidence is a signature performed by the Generator with its
+   private key and contains several elements:
+
+   o  Negotiated TLS cipher suite
+
+   o  Negotiated TLS-N version
+
+   o  Negotiated ChunkSize
+
+   o  Negotiated SaltSize
+
+   o  Final Hash (Section 2.3.1.1)
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019                [Page 8]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+   o  Timestamp Start and Timestamp Stop (Section 2.3.1.2)
+
+   In the following sections, the computation of the Final Hash and the
+   Timestamps is illustrated.  Then, the procedure for generating the
+   evidence is described.
+
+2.3.1.1.  The Final Hash
+
+   The Final Hash is a hash that contains the information for the whole
+   TLS-N session and session's plaintext.  It is computed performing
+   several hashes and using salts to protect hidden chunks against
+   brute-force and dictionary attacks.
+
+2.3.1.1.1.  The salts
+
+   When the first record of application data is exchanged, the Generator
+   divides its plaintext into chunks and counts the number of the
+   chunks.  The result is indicated as NumChunk.  For each chunk, a
+   different salt will be needed, so the Generator has to compute
+   NumChunk salts.  In Figure 2 the process for the generation of four
+   salts is depicted.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019                [Page 9]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+                     +--------------+
+                     |traffic secret|
+                     +--------------+
+                             +
+                             |
+                             v
+           +-----+
+           |Nonce| +---->   E()
+           +-----+
+                             +
+                             |
+                             v
+                          +--+---+
+                          |S{0,0}|
+                          +--+---+
+                             |
+                             |
+                             v
+
+                +---------+ E() +----------+
+                |                          |
+                v                          v
+            +---+--+                   +---+--+
+            |S{1,0}|                   |S{1,1}|
+            +--+---+                   +---+--+
+               |                           |
+               |                           |
+               v                           v
+
+       +----- E() -----+           +----- E() -----+
+       |               |           |               |
+       v               v           v               v
+   +---+--+         +--+---+   +---+--+         +--+---+
+   |S{2,0}|         |S{2,1}|   |S{2,2}|         |S{2,3}|
+   +------+         +------+   +------+         +------+
+
+
+                                 Figure 2
+
+   At the beginning, the Generator computes the salt secret S{0,0}
+   applying an expansion function E() to the traffic secret and a nonce.
+   Then, E() is applied to the salt secret to generate two new salts:
+   S{1,0} and S{1,1}. Then, E() is applied to S{1,0} and to S{1,1} to
+   generate four new salts.  The process is repeated iteratively to
+   generate a salt tree until there are at least NumChunk leaves.
+   Thanks to this process, it is possible to generate NumChunk salts
+   that are independent of each other.  All the salts generated (both
+   the leaves and the intermediate) must be SaltSize long.
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 10]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+   Note: the nonce is not assumed to be secret as it can be deduced by
+   the adversary.
+
+2.3.1.1.2.  The Merkle Tree
+
+   After the salts are generated, a Merkle Tree [Merkle] is built using
+   the salts and the plaintext's chunks as shown in Figure 3 for a
+   NumChunk of four.
+
+                         +-------------+
+                         | Merkle Root |
+                         +------+------+
+                                ^
+                                |
+                                +
+              +---------------> H() <--------------+
+              |                                    |
+              |                ^ ^ ^               |
+              |         +------+ | +----+          |
+          +---+--+      |        |      |       +--+---+
+          |H{1,0}|    +-+--+    ++-+   +++      |H{1,1}|
+          +--+---+    |0x00|    |Or|   |l|      +--+---+
+             ^        +----+    +--+   +-+         ^
+             |                                     |
+             +                                     +
+    +-----> H() <-----+                   +-----> H() <----+
+    |                 |                   |                |
+ +--+---+          +--+---+            +--+---+          +-+----+
+ |H{2,0}|          |H{2,1}|            |H{2,2}|          |H{2,3}|
+ +--+---+          +--+---+            +--+---+          +--+---+
+    ^                 ^                   ^                 ^
+    |                 |                   |                 |
+    +                 +                   +                 +
+   C() <----+        C() <----+          C() <----+        C() <----+
+            |                 |                   |                 |
+    ^    +--+--+      ^     +-+---+       ^    +--+--+      ^    +--+--+
+    |    |Ch{0}|      |     |Ch{1}|       |    |Ch{2}|      |    |Ch{3}|
+    |    +-----+      |     +-----+       |    +-----+      |    +-----+
+    |                 |                   |                 |
++---+--+          +---+---+           +---+--+          +---+--+
+|S{2,0}|          | S{2,1}|           |S{2,2}|          |S{2,3}|
++------+          +-------+           +------+          +------+
+
+                                 Figure 3
+
+   For each chunk (indicated as Ch{i}), a salt is paired to it and a
+   commitment scheme C() is applied to both.  The resulting commitments
+   are used to build a Merkle tree.  In the computation of the Merkle
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 11]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+   Root (MR), not only the first-level hashes (i.e.  H{1,0} and H{1,1})
+   are included, but also the length of the processed record l, a byte
+   of zeroes 0x00, and the originator information Or.  The originator
+   information is 1 if the record was sent by the Generator and 0 if it
+   was sent by the Requester. 0x00 is the MR marker and it is used to
+   prevent second pre-image attacks.
+
+   After the MR has been generated, the Record Hash (RH) is computed
+   hashing the MR with the byte 0x01.  Figure 4 shows a schematic of
+   this procedure.
+
+              +-----------+
+              |Record Hash|
+              +-----------+
+                   ^
+                   |
+                   |
+   +----+          +
+   |0x01+------>  H()
+   +----+
+                   ^
+                   |
+              +----+------+
+              |Merkle Root|
+              +-----------+
+
+
+                                 Figure 4
+
+   The byte 0x01 is the RH marker, and it is used to prevent second pre-
+   image attacks.  Once the RH is computed, the processing of the record
+   is finished, the Generator can drop the plaintext and store only the
+   RH.
+
+2.3.1.1.3.  Subsequent Records
+
+   When the next application data record is exchanged, the MR is
+   computed in the same way as with the first record.  Only the nonce
+   changes.  The use of a new nonce in the generation of the salt tree
+   ensures that the salts of the first record are independent of the
+   salts of the second one.  The new MR is indicated as MR{1}. The only
+   difference concerns the computation of the new Record Hash (RH{1}).
+   The new Record Hash RH{1} is computed hashing the first record's
+   Record Hash (indicated as RH{0}), the byte 0x01 and MR{1}.  Figure 5
+   shows a schematic of this procedure.
+
+
+
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 12]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+                    +----+
+                    |0x01|
+                    +-+--+
+                      |
+                      v
+   +----------+                     +----------+
+   |   RH{0}  +--->  H() +--------> |   RH{1}  |
+   +----------+                     +----------+
+                      ^
+                      |
+                +-----+-----+
+                |   MR{1}   |
+                +-----------+
+
+                                 Figure 5
+
+   For each subsquent record, the procedure is identical to this.  For
+   the ith record Rec{i} (counting from 0), MR{i} and RH{i} will be
+   calculated.  MR{i} will be computed as described in the previous
+   sections, whereas RH{i} will be computed hashing RH{i-1}, the byte
+   0x01 and MR{i}. Figure 6 shows a schematic of this procedure.
+
+                    +---+
+                    |0x1|
+                    +-+-+
+                      |
+                      v
+   +----------+                     +----------+
+   | RH{i-1}  +--->  H() +--------> | RH{i}    |
+   +----------+                     +----------+
+                      ^
+                      |
+                +-----+-----+
+                |  MR{i}    |
+                +-----------+
+
+                                 Figure 6
+
+   The series of RHs forms a hash chain, where RH{i} is the ith element.
+   So, for the rest of this text, HC{i} will indicate the ith element of
+   this hash chain, corresponding to RH{i}. The last element of the
+   chain is the Final Hash (FH).  The Generator only needs to store the
+   Final Hash out of the whole session's plaintext.  When a new
+   application data record is exchanged, the Generator recomputes the
+   new Final Hash an stores it in lieu of the previous one.
+
+
+
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 13]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+2.3.1.2.  Timestamps
+
+   In a TLS-N session two timestamps are taken.  The first is called
+   Timestamp Start and is taken as soon as the first application data
+   record is exchanged.  It represents the beginning of the messages
+   exchange.  The second is called Timestamp Stop and is taken when the
+   evidence is generated.  It represents the end of the messages
+   included in the evidence.
+
+2.3.1.3.  Evidence Conclusion
+
+   After all the elements have been collected, the evidence can be
+   generated.  As explained before, the elements that are included the
+   evidence generation are:
+
+   o  Negotiated TLS cipher suite
+
+   o  Negotiated TLS-N version
+
+   o  Negotiated ChunkSize
+
+   o  Negotiated SaltSize
+
+   o  Final Hash
+
+   o  Timestamp Start and Timestamp Stop
+
+   The hash of these elements is computed and the result is signed with
+   the Generator's private key.  Figure 7 shows a schematic of this
+   procedure.
+
+   +----------------------------+            Generator's
+   |Negotiated TLS cipher suite +----+       private key
+   +----------------------------+    |            +
+   |Negotiated TLS-N version    +----+            |
+   +----------------------------+    |            +---+
+   |Negotiated ChunkSize        +----+                |
+   +----------------------------+    |                v
+   |Negotiated SaltSize         +----+----> H()+--> Sign
+   +----------------------------+    |               +
+   |Final Hash                  +----+               |
+   +----------------------------+    |               v
+   |Timestamp Start             +----+          +----+---+
+   +----------------------------+    |          |Evidence|
+   |Timestamp Stop              +----+          +--------+
+   +----------------------------+
+
+                                 Figure 7
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 14]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+   If the Requester chooses not to split the plaintexts into chunks,
+   each plaintext will be treated as composed of one single chunk, and
+   the process for evidence generation will not change.
+
+   When the Generator computes the evidence, it is unaware of which
+   parts of the plaintext the Requester wants to hide.  The evidence is
+   always the same, independently on how sensitive each records is.  The
+   Requester will choose which chunks to hide after it has received the
+   evidence.
+
+   Once the evidence has been generated, it is sent together with the
+   ordering vector information (Section 2.3.2) to the Requester.
+
+2.3.2.  Ordering Vector
+
+   The generation of the evidence is non-trivial as the Requester and
+   Generator might observe a different order of records.  For example,
+   suppose that the two peers exchange some records and indicate the
+   i-th record (counting from 0) of the Requester and the Generator as
+   r(i) and g(i) respectively.  If both peers simultaneously send
+   records r(0) and g(0), each peer will observe its sent record before
+   observing its received record, resulting in two different orders:
+   (r(0), g(0)) and (g(0),r(0)).
+
+   However, the two peers have identical partial orders over records
+   generated by one peer, i.e., they observe the same order for all r(i)
+   and for all g(i).  So, based on their partial orders, both peers have
+   to agree on a total order.  In TLS-N the Generator chooses and
+   imposes the total order of records, as it generates the evidence.  To
+   inform the Requester about the chosen total order, the Generator uses
+   an ordering vector.  As both peers have the same partial order over
+   r(i) and g(i), the ordering vector is a bit vector encoding the
+   interleaving of r(i) and g(i).  In the ordering vector, a 0
+   corresponds to a record sent by the Requester r(i) and a 1 to a
+   record sent by the Generator g(i).  For example, an ordering vector
+   of (1, 0, 0, 1) results in the total record order of (g(0), r(0),
+   r(1), g(1)).
+
+   The Generator sends information about the ordering vector together
+   with the evidence in the tlsn-response.  For further details about
+   the ordering vector information, see Section 2.4.
+
+2.3.3.  Building the tlsn-response
+
+   After the evidence and the ordering vector have been computed, the
+   tlsn-response is built.  It contains the following elements:
+
+      The evidence
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 15]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+      The ordering vector information
+
+      Timestamp Start and Timestamp Stop
+
+   After the tlsn-response is built, it is sent to the Requester.
+
+2.4.  The tlsn-ord_vector and the ordering vector information
+
+   Beside tlsn-request and tlsn-response, the tlsn-ord_vector message is
+   also introduced in TLS-N.  In fact, in really long sessions the
+   ordering vector might become huge, and it may not be convenient to
+   make the Generator store it.  Thus, when its size reaches a certain
+   number of bytes, indicated as MaxOrdVec, the Generator sends it to
+   the Requester and resets it.  The Requester accumulates all the
+   ordering vectors received with the tlsn-ord_vector message in the
+   "accumulated ordering vector".
+
+   Specifically, the protocol follows this procedure:
+
+   o  Every sent or received application data message, the Generator
+      updates its ordering vector
+
+   o  After 8 * MaxOrdVec messages, the Generator has filled MaxOrdVec
+      bytes of ordering vector (note that the ordering vector is a bit
+      vector and each byte represent 8 messages)
+
+   o  Thus, at this time, the Generator MUST send the ordering vector in
+      the tlsn-ord_vector message
+
+   o  The Requester stores the data received in the accumulated ordering
+      vector
+
+   o  The Generator empties its ordering vector and begins updating it
+      with the new messages that they exchange
+
+   The process is repeated cyclically and the tlsn-od_vector is sent
+   every time the Generator fills MaxOrdVec bytes.  Thus, the Generator
+   does not store the whole vector, it only stores a part which will be
+   indicated as "GS (Generator-stored) ordering vector".  The "ordering
+   vector" is the concatenation of the accumulated and the GS ordering
+   vector, and it is the only one that contains the information for all
+   the records of the session.
+
+   Thus, in the tsln-response, the ordering vector information is simply
+   the GS ordering vector.  The Requester will receive it and use it to
+   build the vector for the whole session.
+
+
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 16]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+2.5.  Proof Generation and Verification
+
+   Once the Requester has received the tlsn-response, it can construct
+   the proof and send it to the Verifier.  The proof comprehends:
+
+   o  evidence
+
+   o  information about the session (negotiated TLS cipher suite,
+      negotiated TLS-N version, negotiated ChunkSize, negotiated
+      SaltSize, Timestamp Start and Timestamp Stop)
+
+   o  plaintext information (explained in the following sections).  It
+      depends on how much information the Requester wants to give to the
+      Verifier about the session's plaintext.
+
+   o  Generator's certificate chain
+
+   The Verifier will check that Timestamp Start and Timestamp Stop
+   belong to the time period when it expects the exchange of messages
+   happened.  Depending on the application, it also verifies that they
+   are not too far apart, otherwise it would mean that the exchange of
+   messages has been longer than expected.
+
+   For each exchanged record Rec{i}, the Requester can compute MR{i} and
+   HC{i}. In fact, the Requester knows the plaintexts of the messages
+   and the cipher suite agreed (E(), C() and H() are functions derived
+   from the agreed cipher suite).  The Requester can also compute the
+   salts, because it knows the traffic secret and the nonce (the nonce
+   is not secret).  This is important because some MRs and HCs can be
+   included in the proof as part of the plaintext information.
+
+   The Requester must also include the Generator's certificate chain
+   within the proof.  Thus, the Verifier can verify that the CA of the
+   certificate chain belongs to its trust store and retrieve the
+   Generator's public key.
+
+2.5.1.  One record proof
+
+   In case the Requester wants to prove that Rec{i} was sent or received
+   by the Generator, it can send as plaintext information:
+
+   o  plaintext of i
+
+   o  salt secret of i
+
+   o  the Or of i
+
+   o  HC{i-1}
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 17]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+   o  MR{i+1}, MR{i+2}, ... , MR{n} where n is the last exchanged record
+
+   Thanks to this information, the Verifier can compute the Final Hash
+   of the TLS-N session( i.e. HC{n} ).  Then, it can verify that the FH
+   and the other elements of the proof correspond to the evidence's
+   content, verifying that the record Rec{i} was really sent (if the Or
+   is 1) or received (if the Or is 0) by the Generator.
+
+   The Verifier will only have the plaintext of i and will not learn any
+   other information about the rest of the session's plaintext.
+
+2.5.2.  Multiple records proof
+
+   In case the Requester wants to prove that records j,k and l (j < k <
+   l) were sent or received by the Generator, it can send as plaintext
+   information:
+
+   o  plaintexts of j, k, and l
+
+   o  salt secrets of j, k and l
+
+   o  the Or of j, k and l
+
+   o  HC{j-1}
+
+   o  MR{j+1}, MR{j+2}, ... , MR{n} excluding MR{k} and MR{l}
+
+   Again, thanks to this plaintext information, the Verifier can compute
+   FH and verify the information.
+
+   The procedure, of course, can be extended to all the records of the
+   session.
+
+2.5.3.  Hiding chunks
+
+   In case the Requester wants to hide the sensitive chunks of one
+   record, the procedure changes only slightly.  Instead of sending the
+   plaintext of the whole record, it sends the plaintext of the non-
+   sensitive chunks and the comittment scheme of the sensitive ones.
+   The Verifier will still be able to compute the MR of the record and
+   verify the proof.
+
+   Also, the salt secret of the record can no longer be sent.  In fact,
+   a malicious Verifier could use it to compute the salts of the
+   sensitive chunks and break their commitment scheme.  For each record,
+   the Requester must send all the salts of the non-sensitive chunks.
+
+   All the other parts of the plaintext information remain the same.
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 18]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+3.  The tlsn-request generation
+
+   The tlsn-request message is a record of type TLS-N_message and its
+   plaintext is the byte 0x01.  When the Requester sends this message to
+   the Generator, the Generator MUST build and send the tlsn-response.
+
+   enum {
+       tlsn_message_type_request = 1,
+       tlsn_message_type_response = 2,
+       tlsn_message_type_ord_vector = 3
+   }TLSN_message_type;
+
+   TLSN_message_type tlsn-request = tlsn_message_type_request;
+
+4.  The tlsn-response generation
+
+   In this section, the formation of the tlsn-response is described.
+
+   The cryptographic hash that has been negotiated by the peers in the
+   handshake is indicated as H().  The ouptut length of H() is indicated
+   as H().Len.  Also, some variables are defined to store the other
+   negotiated parameters:
+
+      uint16 chunk_size = ChunkSize;
+
+      uint16 salt_size = SaltSize;
+
+      uint8 tlsn_version = 0;
+
+      uint16 hash_size = H().Len;
+
+   The tlsn_version paramater is 0 because at the moment of writing
+   there is only one version of TLS-N and it is indicated with 0.
+
+   Note: all the quantities are transcribed in the evidence in Network
+   Byte Order.
+
+4.1.  Salt secret generation
+
+   When a record is exchanged PlLen, GenOrig, NumChunk and NumLevel are
+   computed.  PlLen is the length of the plaintext in bytes.  GenOrig is
+   (as explained in Section 2.3.1.1.2 the originator information and it
+   is 1 if the record was sent by the Generator and 0 if it was sent by
+   the Requester).  NumLevel is the number of levels that the Salt tree
+   and the Merkle tree of the record must have.  It is equivalent to
+   ceil(logb2(NumChunk)).
+
+
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 19]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+   For the generation of the salt secret of a record, a traffic_secret
+   and a nonce are needed.
+
+      opaque traffic_secret[hash_size] =
+         [sender]_application_traffic_secret_N;
+
+      uint64 nonce = read/write_sequence_number;
+
+   For the traffic secret, [sender]_application_traffic_secret_N is
+   taken, where [sender] stands for the sending side (client or server).
+   [sender]_application_traffic_secret_N is generated during the TLS 1.3
+   handshake, as described in Section 7 of I-D.ietf-tls-tls13
+   [I-D.ietf-tls-tls13].
+
+   For the nonce, the read or write sequence number is taken ("read/
+   write" stands for "read" if the record is read and "write" if the
+   record is written by the peer).  The read sequence number is a number
+   that, starting from 0, increments by 1 for every record read by the
+   peer.  The write sequence number does the same for the written
+   records.  More detailed explanation is given in the first paragraphs
+   of section 5.3 of I-D.ietf-tls-tls13 [I-D.ietf-tls-tls13].
+
+   Note: The first record of application data exchanged might not have a
+   sequence number of 0.  This is because the sequence number can also
+   increment over the handshake messages.
+
+   Then, the salt secret is computed performing an hkdf expansion:
+
+      opaque Salt[salt_size];
+
+      opaque label[]= "tls13 salt secret";
+
+      uint8 label_len = sizeof(label);
+
+      Salt salt_secret = HKDF-Expand(nonce || traffic_secret,
+         salt_size || label_len || label || 0x00, salt_size);
+
+   The HKDF-Expand function is defined in RFC 5869 [RFC5869] and it uses
+   the hash algorithm H().  The strings specified in this document are
+   all ASCII strings, and do not include a trailing NUL byte.
+
+4.2.  Salt Tree generation
+
+   The salt tree is computed according to the indications presented in
+   section Section 2.3.1.1.1.  The expansion E() is performed on the
+   salt secret S{0,0} using HKDF-Expand.  The output of HKDF-Expand() is
+   2*salt_size long and the first half of this output is taken as
+   S{1,0}, whereas the second half is taken as S{1,1}. Similarly, every
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 20]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+   S{n,x} will be expanded forming S{n+1, 2*x} and S{n+1, 2*x+1} until
+   all the necessary salts are computed.
+
+      opaque info = "tls13 TLSNSaltTree";
+
+      uint8 info_len = sizeof(info);
+
+      Salt HKDFOutput[2];
+
+      HKDFOutput output{n,x} = HKDF-Expand(S{n,x},
+         2*salt_size || info_len || info || 0x00, 2*salt_size);
+
+      Salt S{n+1,2*x} = output{n,x}[0];
+      Salt S{n+1,2*x+1} = output{n,x}[1];
+
+
+   At the end of the process S{NumLevel,0}, S{NumLevel,1}, ...,
+   S{NumLevel, NumChunk-1} will be collected and they will be used for
+   generating the Merkle tree.
+
+   If NumChunk is 1, the salt secret can be directly used as a salt for
+   the Merkle tree computation and no salt tree must be computed.
+
+4.3.  Merkle Tree generation
+
+   The Merkle tree is computed according to the indications presented in
+   section Section 2.3.1.1.2.  The commitment scheme C() is performed on
+   each salt-chunk pair using the hash function H().  For each chunk
+   Ch{n}, its commitment is calculated doing H{NumLevel,n} =
+   H(Salt{NumLevel,n} || Chunk{n}).  Then, every node of the Merkle tree
+   is calculated as following:
+
+      opaque HashDigest[hash_size];
+
+      HashDigest H{n,x} = H(H(n+1,2*x) || H(n+1,2*x+1));
+
+   Note: If NumChunk is not a power of 2, for some nodes the term
+   H(n+1,2*x+1) will not exist. In that case H{n,x} = H(n+1,2*x).
+
+   The only exception to the rule is represented by the Merkle Root
+   (MR or H{0,0}), which is calculated as following:
+
+      uint8 merkle_root_marker = 0;
+      uint16 buf_len = PlLen;
+      uint8 gen_orig = GenOrig;
+
+      HashDigest H{0,0} = H(H{1,0} || H {1,1} || merkle_root_marker ||
+         || buf_len || gen_orig);
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 21]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+   If there is only one chunk, the MR is directly computed with H{0,0} =
+   H(S{0,0} || Ch{0} || merkle_root_marker || buf_len || gen_orig).
+
+4.4.  Final Hash generation
+
+   MR{i} and HC{i} indicate the Merkle Root and the hash chain element
+   of record i respectively.  The hash chain element of the first record
+   HC{0} is computed as following:
+
+      uint8 hash_chain_marker = 1;
+
+      HashDigest HC{0} = H(hash_chain_marker || MR{0});
+
+   For every subsequent HC{i}, the following is used:
+
+      HashDigest HC{i} = H(hash_chain_marker || HC{i-1} || MR{i});
+
+4.5.  Timestamps generation
+
+   The timestamps are 64 bit unsigned integers expressing the number of
+   microseconds since the Unix Epoch time (00:00:00 UTC Thursday, 1
+   January 1970).  For example 2018y 03m 19d 18h 36m 26s 523ms 411us
+   will be represented as 1521484586523411.
+
+      uint64 timestamp_start;
+
+      uint64 timestamp stop;
+
+4.6.  The hash algorithms
+
+   A one byte parameter is used to represent the negotiated hash
+   algorithm H().  The values are taken from the IANA TLS ContentType
+   Registry defined in Section 7.4.1.4.1 of RFC 5226 [RFC5226]
+
+      HashAlgorithm hash_algorithm;
+
+   Note: At the time of writing, only sha224, sha256, sha384 and sha512
+   are accepted because considered secure.
+
+4.7.  Evidence
+
+   All the important elements for the evidence are hashed using H():
+
+      HashDigest evidence_hash = H(tlsn_version || HC{NumChunk-1} ||
+         || timestamp_start || timestamp_stop || salt_size || chunk_size
+            || hash_algorithm);
+
+
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 22]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+   Then, a signature is performed using the private key K of the
+   Generator.  The output of the signature is the evidence.  Sign(K,M)
+   indicates the signing of message M with the private key K, using the
+   signature scheme agreed by the peers.
+
+      opaque evidence < ... >= Sign(K,M);
+
+      evidence_len = sizeof(evidence);
+
+   Now the evidence is complete.
+
+4.8.  Ordering Vector management
+
+   As explained in Section 2.3.2, the GS ordering vector is a sequence
+   of bits computed by the Generator representing the sender of each
+   message.  The bit 1 means that the message was sent by the Generator,
+   whereas the bit 0 means that the message was sent by the Requester.
+   When the 0th message is exchanged (in this sections, all the ordinal
+   numbers represent a counts that starts from 0), a new byte is
+   allocated for the GS ordering vector and the 7th bit is set.  For
+   example, if the first message is sent by the Generator, the resulting
+   GS ordering vector will be
+
+      xxxxxxx1
+
+   where x indicates an undefined bit.  When the 1st message arrives,
+   the 6th bit is set.  For example, if it is sent by the Requester, the
+   ordering vector will be
+
+      xxxxxx01
+
+   So, the nth message will set the (7-n)th bit of the byte.
+
+   When the eight message is exchanged, a new byte is allocated AFTER
+   the previous one.  This byte will also be set starting from the last
+   bit.  For example, if the Generator sends 11 messages, the GS
+   ordering vector will be
+
+      11111111 xxxxx111
+
+   In general, indicating with b the number of the last allocated byte ,
+   the nth message will set the ((b+1)*8 - n - 1)th bit in byte b.
+
+   The following table shows some examples of GS ordering vector.
+
+
+
+
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 23]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+   +-----------------------------------------------+-------------------+
+   |      Messages (notation from Section 2.3)     |    GS ordering    |
+   |                                               |       vector      |
+   +-----------------------------------------------+-------------------+
+   |                    (g0,r0)                    |      xxxxxx01     |
+   +-----------------------------------------------+-------------------+
+   | (g0,g1,r1,r2,r3,r4,r5,r6,r7,r8,r9,r10,r11,g2) | 00000011 xx100000 |
+   +-----------------------------------------------+-------------------+
+   |        (g0,g1,r1,r2,r3,r4,r5,r6,r7,r8,        | 00000011 11100000 |
+   |           r9,r10,r11,g2,g3,g4,g5,g6)          |      xxxxxx11     |
+   +-----------------------------------------------+-------------------+
+
+   So the GS ordering vector's length depends on the number of messages
+   exchanged:
+
+      uint32 GS_ordering_vector_len = number_of_messages_exchanged;
+
+      opaque GS_ordering_vector[ceil(ordering_vector_len/8)];
+
+   After 8 * MaxOrdVec messages, the GS ordering vector will be
+   MaxOrdVec full bytes long.  At this point, the Generator sends it to
+   the Requester with a tsln-ord_message and resets it completely, as if
+   no message was exchanged.  This process is done every 8 * MaxOrdVec
+   messasges.  So, for example, if during a session the Generator sends
+   MaxOrdVec + 3 consecutive messages, the GS ordering vector at that
+   point will be simply xxxxx111.
+
+4.9.  Building the tlsn-response
+
+   It is now possible to build the tlsn-response.  It contains the
+   evidence, the GS ordering vector, and some information about the
+   TLS-N session.
+
+      TLSN_message_type tlsn-response_type =
+         tlsn_message_type_response
+
+      opaque tlsn-response[] = tlsn-response_type || timestamp_start
+          || timestamp_stop || GS_ordering_vector_len
+          || evidence_len || evidence || GS_ordering_vector;
+
+   The tlsn-response is sent by the Generator to the Requester in a
+   record of type TLS-N_message, having tlsn-response[] as plaintext.
+
+5.  The tlsn-ord_vector generation
+
+   The tlsn-ord_vector message is built as follows:
+
+
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 24]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+      TLSN_message_type tlsn-ord_vector_type =
+          tlsn_message_type_ord_vector
+
+      opaque tlsn-ord_vector[MaxOrdVec + 1] = tlsn-ord_vector_type
+          || GS_ordering_vector;
+
+6.  The proof generation
+
+   Once the Requester has received the tlsn-response, it can use it to
+   build the proof.
+
+6.1.  First part
+
+   The first part of the proof contains information about the TLS-N
+   session.  It also includes the certificate chain of the Generator in
+   DER format.
+
+       /* stores the certificate chain in DER format */
+       opaque gen_cert_chain <0 ... 2^16>;
+       uint16 gen_cert_chain_len = sizeof(gen_cert_chain);
+
+       uint16 num_proof_nodes; //explained in next section
+
+       opaque first_part[] = tlsn_version || hash_algorythm
+           || salt_size || chunk_size || evidence_len
+           || timestamp_start || timestamp_stop || num_proof_nodes
+           || gen_cert_chain_len || evidence  || gen_cert_chain ;
+
+   In certain networks (like the ones that operate with blockchains),
+   there is no need for sending a certificate chain.  In these cases,
+   the gen_cert_chain can be omitted and gen_cert_chain_len set to 0.
+
+6.2.  Second Part
+
+   In the second part of the proof, the information about the plaintext
+   of the session is given.  As explained in Section 2.5, for each
+   record i, the MR{i}, the HC{i}, the plaintext, part of the plaintext,
+   or even nothing can be shown.
+
+   Suppose that a total of 10 messages were exchanged in a TLS-N
+   session.  Suppose the Requester wants to build a proof that shows the
+   plaintext of Rec{5} (the 5th record, counting from 0) and part of the
+   plaintext of Rec{9} (the last record).  It will have to include in
+   the proof:
+
+   o  HC{4}
+
+
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 25]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+   o  the plaintext of Rec{5}, its salt secret and its originator
+      information
+
+   o  MR{6}, MR{7}, MR{8}
+
+   o  some chunks of Rec{9}, some of its salts and the originator
+      information
+
+   For each record that contributes to the proof, the Requester builds a
+   structure called ProofNode.  A ProofNode is a structure that contains
+   all the information that comes from a record.  For example, in this
+   case, the Requester will use:
+
+   o  One ProofNode that contains HC{4}
+
+   o  One ProofNode that contains the plaintext of Rec{5}, its salt
+      secret and its originator information (Or)
+
+   o  Three ProofNodes that contain MR{6}, MR{7} and MR{8} respectively
+
+   o  One ProofNode that contains the desired chunks of Rec{9}, the
+      necessary salts and the originator information (Or)
+
+   In total, the Requester will have to build 6 ProofNodes.  The second
+   part of the proof is the concatenation of them, ad it will be
+   appended to the first part to generate the complete proof.  The
+   num_proof_node variable (Section 6.1) must be set to the number of
+   ProofNodes that will be included in the proof.  In this case it is 6.
+
+   Naturally, each ProofNode will have a different format, depending on
+   what it contains.  There are 4 types of ProofNodes:
+
+      typedef enum {
+          hash_chain_node = 1, // contains a hash chain
+          plaintext_node = 2, // contains plaintext, salt and Or
+          merkle_hash_node = 3, // contains a Merkle Root
+          hidden_plaintext_node = 4 //contains some chunks, salts and Or
+      } TLSNNodeType;
+
+   A description of how the Requester builds these ProofNodes types
+   follows.  For each record Rec{i}, Pl{i} indicates its plaintext,
+   PlLen{i} indicates the plaintext's length, Si{n,x} and Hi{n.x}
+   indicate respectively its salt and its hash (n and x refer to their
+   position in the salt and Merkle trees).
+
+   For every record, the originator information can be computed by the
+   Requester from all the previously received tlsn-ord_vector messages
+   and from the GS_ordering_vector contained in the tlsn-response.
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 26]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+6.2.1.  The hash chain ProofNode
+
+   The hash chain ProofNode for a generic Rec{i} is obtained as follows:
+
+           TLSNNodeType identifier{i} = hash_chain_node;
+           opaque ProofNode{i}[] = identifer{i} || HC{i};
+
+   In the current example, the Requester will create a
+   HashChainProofNode for Rec{4}.
+
+6.2.2.  The plaintext ProofNode
+
+   The plaintext ProofNode for a generic Rec{i} is obtained as follows:
+
+       typedef struct {
+           uint16 plaintext_len;
+           uint8 gen_orig;
+       } PLaintextProofNodeInfo;
+
+       TLSNNodeType identifier{i} = plaintext_node;
+       PlaintextProofNodeInfo info{i} = {PlLen{i}, Or{i}};
+       opaque plaintext{i}[PlLen{i}] = Pl{i};
+       opaque salt_secret{i}[salt_size] = Si{0,0};
+       opaque ProofNode{i}[] = identifier{i}
+           || info{i} || plaintext{i} || salt_secret{i};
+
+   In the current example, the Requester will create a
+   PlaintextProofNode for Rec{5}.
+
+6.2.3.  The Merkle hash ProofNode
+
+   The Merkle hash ProofNode for a generic Rec{i} is obtained as
+   follows:
+
+           TLSNNodeType identifier{i} = merkle_hash_node;
+           opaque ProofNode{i}[] = identifer{i} || MR{i};
+
+   In the current example, the Requester will create a
+   MerkleHashProofNode for Rec{6}, Rec{7} and Rec{8}.
+
+6.2.4.  The hidden plaintext ProofNode
+
+   The hidden plaintext ProofNode contains the information for the
+   records in which some chunks present sensitive information, so they
+   are hidden.  Several elements concur to the creation of this
+   ProofNode.
+
+
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 27]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+6.2.4.1.  The hashes and the salts
+
+   As previously explained, to hide the sensitive chunks of a record's
+   plaintext, the Requester must send their commitment scheme.  However,
+   if two sensitive chunks are consecutive and have the same parent in
+   the Merkle tree, the Requester MUST directly send their common
+   parent.  The Verifier will still be able to compute the Merkle Root
+   and it reduces the number of hashes to be sent.  Similarly, if four
+   sensitive chunks are consecutive and have the same grandparent in the
+   Merkle tree, the Requester MUST directly send their common
+   grandparent.  As a general rule, if a node of the Merkle tree has
+   only sensitive descendants, its merkle hash can be sent in lieu of
+   the ones of the descendants.  This action is called "Grouping".
+
+   For example, if in Figure 3 Ch{0}, Ch{1} and CH{3} are sensitive, the
+   Requester will include H{1,0} and H{2,3} in the proof
+
+   A similar concept applies to the salts.  As previously explained, the
+   Requester must send all the salts that correspond to the NON-
+   sensitive chunks.  However, if a node of the salt tree has only non-
+   sensitive descendants, one can perform a Grouping and send the its
+   salt.
+
+   For example, if in Figure 2 Ch{2} is sensitive, the Requester will
+   send S{1,0} and S{2,3}.
+
+   Let's now suppose that a record has three chunks and CH{0} and Ch{1}
+   are sensitive.  The Requester would need to send S{2,2}. But, in this
+   case, S{2,2} is an only child of S{1,1}, so it would be possible to
+   send S{1,1} instead of it.  The Requester MUST not do it.  Although
+   feasible, it would be computationally inefficient.  As a general
+   rule, when a node is an only child and the Requester needs to send
+   its salt, if it is not possible do to a Grouping to one of its
+   ancestors, it will include its salt in the proof (not its parent's
+   one).
+
+   For the Merkle tree, the rule is the opposite.  In case of lonely
+   child, the hash to be sent is the parent's one.  Note that, according
+   to what specified in Section 4.3, in case of lonely parents, the
+   parent's hash is the same as the child's one.  When the Requester
+   sends the hash to the Verifier, the only thing that changes is the
+   indicator of the position of the hash in the Merkle tree.
+
+   In the following table, find some examples on which salts and hashes
+   must be included in the proof in different scenarios.
+
+
+
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 28]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+   +----------+-------------------+---------------+--------------------+
+   | NumChunk |   Hidden chunks   |     Hashes    |       Salts        |
+   +----------+-------------------+---------------+--------------------+
+   |    8     |   Ch{2}, Ch{3},   |    H{2,1},    |  S{2,0}, S{2,2},   |
+   |          |       Ch{7}       |     H{3,7}    |       S{3,6}       |
+   +----------+-------------------+---------------+--------------------+
+   |    7     |    Ch{2}, Ch{3}   |     H{2,1}    |   S{2,0}, S{1,1}   |
+   +----------+-------------------+---------------+--------------------+
+   |    7     |   Ch{2}, Ch{3} ,  |    H{2,1},    |   S{2,0}, S{2,2}   |
+   |          |       Ch{6}       |     H{2,3}    |                    |
+   +----------+-------------------+---------------+--------------------+
+   |    6     |   Ch{2}, Ch{3} ,  |    H{2,1},    |   S{2,0}, S{3,4}   |
+   |          |       Ch{5}       |     H{3,5}    |                    |
+   +----------+-------------------+---------------+--------------------+
+   |    5     |   Ch{2}, Ch{3},   |    H{2,2},    |       S{2,0}       |
+   |          |       Ch{4}       |     H{1,4}    |                    |
+   +----------+-------------------+---------------+--------------------+
+   |    5     |    Ch{2}, Ch{3}   |     H{2,1}    |   S{2,0}, S{3,4}   |
+   +----------+-------------------+---------------+--------------------+
+
+6.2.4.2.  The hashes and the salts in the proof
+
+   Once the salts to be sent have been determined, their location is
+   stored.  Suppose that, for Rec{i}, there are NumProofSalt to be sent.
+   These salts can be indicated with ProofSalt{0}, ProofSalt{1}, ... ,
+   ProofSalt{NumProofSalt - 1}. The level of ProofSalt{k} can be
+   indicated with ProofSaltLevel{k}. ProofSaltIndex{k} indicates the
+   index of the of ProofSalt{k}.
+
+   For example, in the first case shown in the table above, the salts to
+   be included in the proof are S{2,0}, S{2,2} and S{3,6}. So S{2,0}
+   will correspond to ProofSalt{0}, S{2,2} to ProofSalt{1} and S{3,6} to
+   ProofSalt{2} (Note: the order is irrelevant).  ProofSaltLevel{0} will
+   be 2, ProofSaltLevel{1} will be 2 and ProofSaltLevel{2} will be 3.
+   The assignment of ProofSaltIndex{i}, though, is a bit different.  In
+   the notation S{n,x}, the x indicates the xth node of the level
+   counting from the left.  The ProofSaltIndex, instead, represents the
+   index of the last-level leftmost descendant of the ProofSalt.  Taking
+   ProofSalt{1}, for example, one can observe that it corresponds to
+   S{2,2} and it is in a three-level Merkle tree.  This means that it
+   has two last-level descendants: S{3,4} and S{3,5}. The left-most one
+   is S{3,4}, so ProofSaltIndex{1} will be 4.  ProofSaltIndex{0} will be
+   0 and ProofSaltIndex{2} will be 6.
+
+   The information about the ProofSalts is stored in an array
+
+
+
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 29]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+    typedef struct {
+        uint16 level;
+        uint16 index;
+    } ProofSaltLoc;
+
+    ProofSaltLoc proofSaltLoc[NumProofSalt] =
+     {{ProofSaltLevel{0}, ProofSaltIndex{0}}, ... ,
+      {ProofSaltLevel{NumProofSalt-1}, ProofSaltIndex{NumProofSalt-1}}};
+
+    opaque saltInfo[]= proofSaltLoc || ProofSalt{0} || ...
+        || ProofSalt{NumProofSalt-1};
+
+   Similarly, for Rec{i} the will be NumProofHash stored in
+   ProofHash{0}, ... , ProofHash{NumProofHash - 1}. The level of each
+   ProofHash{k} will be indicated by ProofHashLevel{k}. The index
+   refers, as for the ProofSalts, to the last-level leftmost descendant
+   and and it is stored in ProofHashIndex{k}.
+
+    typedef struct {
+        uint16 level;
+        uint16 index;
+    } ProofHashLoc;
+
+    ProofHashLoc proofHashLoc[NumProofHash] =
+     {{ProofHashLevel{0}, ProofHashIndex{0}}, ... ,
+      {ProofHashLevel{NumProofHash-1}, ProofHashIndex{NumProofHash-1}}};
+
+    opaque hashInfo[]= proofHashLoc || ProofHash{0} || ...
+        || ProofHash{NumProofHash-1};
+
+6.2.4.3.  Completing the hidden plaintext node
+
+   It is now possible to build the hidden plaintext node for Rec{i}. The
+   plaintext deprived of the hidden chunks is calculated, and it is
+   represented by HidPl{i}, which is HidPlLen{i} long.  For example, if
+   Rec{i} is "password= 12345 . It is not secure" and the chunk "12345"
+   is hidden, HidPl{i} will be "password= . It is not secure" and
+   HidPlLen{i} will be 29.
+
+
+
+
+
+
+
+
+
+
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 30]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+       typedef struct {
+           uint16 plaintext_len;
+           uint16_t num_salts;
+           uint16_t num_hashes;
+           uint8 gen_orig;
+       } HidPLaintextProofNodeInfo;
+
+       TLSNNodeType identifier{i} = hidden_plaintext_node;
+       HidPlaintextProofNodeInfo info{i} =
+           {PlLen{i}, NumProofSalt, NumProofHash, Or{i}};
+       opaque hid_plaintext{i}[HidPlLen{i}] = HidPl{i};
+       opaque ProofNode{i}[] = identifier{i}
+               || info{i} || saltInfo || hashInfo || HidPl{i};
+
+   In the current example, the Requester will build a hidden plaintext
+   ProofNode for Rec{9}.
+
+6.2.5.  Completing the second part
+
+   As previously stated, in the current example the Requester will build
+   6 ProofNodes, concatenate them, and form the second part of the
+   proof.  It will also set num_proof_nodes to 6.
+
+   In general, the Requester will decide the types of the ProofNodes
+   with the following rules:
+
+   1.  All the records that have no hidden chunks will be plaintext
+       ProofNodes.  All the records having parts of the chunks hidden
+       will be hidden plaintext ProofNodes.
+
+   2.  All the records before the first (hidden) plaintext ProofNode
+       will not form any ProofNode.  The only exception is the record
+       right before the first (hidden) plaintext ProofNode.  This will
+       form an hash chain ProofNode.
+
+   3.  All the remaining records are Merkle hash ProofNodes.
+
+       opaque second_part[] = ProofNode{0} || ...
+           || ProofNode{NumProofNodes -1};
+
+       num_proof_nodes = NumProofNodes;
+
+   Naturally, first_part must be updated with the new value of
+   num_proof_nodes.
+
+
+
+
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 31]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+6.3.  Completing the proof
+
+   As previously explained, the proof will be completed by concatenating
+   the first and the second part.
+
+       opaque proof[] = first_part || second_part;
+
+7.  The proof verification
+
+   When the Verifier receives the proof, it can compute the Final Hash
+   with the following steps:
+
+   1.  Compute the Merkle root (MR) of each (hidden) plaintext ProofNode
+       as shown in Section 4.2 and Section 4.3.
+
+   2.  Using the hash chain from the hash chain ProofNode (if any) and
+       all the Mekle roots, one can compute the Final Hash as shown in
+       Section 4.4
+
+   With the Final Hash and the information in the proof, the Verifier
+   can compute the evidence hash (is the hash the is signed to make the
+   evidence).
+
+   The Verifier, then, verifies the certificate chain of the Generator
+   and extracts the public key.  If the certificate chain if omitted, it
+   means that the Verifier can access it on its own.
+
+   Using the public key, the Verifier can verify that the evidence
+   matches the evidence hash that it has computed.  If the verification
+   is successful, the proof is successfully verified.
+
+8.  Acknowledgements
+
+   This template was derived from an initial version written by Pekka
+   Savola and contributed by him to the xml2rfc project.
+
+   This document is part of a plan to make xml2rfc indispensable.
+
+9.  IANA Considerations
+
+   This document uses a registry that was originally created in [I-
+   D.ietf-tls-tls13] [I-D.ietf-tls-tls13].  IANA [SHALL add/has added]
+   the TLS ContentType Registry with the following indicator:
+
+
+
+
+
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 32]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+             +--------+---------------+---------+-----------+
+             | Value  |  Description  | DTLS-ok | Reference |
+             +--------+---------------+---------+-----------+
+             |  TBD   | TLS-N_message |    N    |  RFC XXXX |
+             +--------+---------------+---------+-----------+
+
+10.  Security Considerations
+
+   A complete security analysis of TLS-N is outside the scope of this
+   document.  In this section, a description of the security properties
+   and how they are achieved is presented.  For further references to
+   more detailed work, please refer to the TLS-N Research Paper
+   [tlsn_paper], appendix A.
+
+10.1.  Trust assumptions
+
+   In the design and presentation of TLS-N, the following trust
+   assumptions have been made:
+
+   1.  The used cryptographic primitives such as digital signatures and
+       cryptographic hash functions are secure.  H() must produce a
+       binding and hiding commitment.  Note, that the hiding property of
+       hash functions has neither been proven nor rejected.
+
+   2.  There exists a Public Key Infrastructure (PKI) that correctly
+       binds entities to the public keys used in TLS, i.e. the trsut
+       assumptions of TLS are inherited.  Hence, both Requester and
+       Verifier trust the Generator's identity.
+
+   3.  The private keys used by the Generator are not leaked to the
+       adversary and the Generator will not sign arbitrary statements.
+       Concrete solutions to the problem of revoked or leaked private
+       keys are considered to be out of the scope of this work (a non-
+       repudiable statement could be included in a blockchain together
+       with a consecutive Online Certificate Status Protocol (OCSP)
+       response to proof the validity at creation time).
+
+   4.  The verifier trusts the Generator to produce accurate content and
+       timestamps.
+
+10.2.  Security properties
+
+   For the security analysis, the security definition of Content
+   Extraction Signature [CES] is adopted.  TLS-N tries to achieve the
+   following security properties (some of which are from Steinfeld et al
+   [CES]).
+
+
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 33]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+   1.  A valid proof can only be produced for a plaintext that is part
+       of the session's plaintext that was signed in the evidence.  This
+       is an adaptation of the CES-Unforgeability.
+
+   2.  A proof leaks no information about hidden parts.  This is an
+       adaptation of the CES_Privacy.
+
+   3.  The proof reveals the structure of hidden data.  Records with
+       hidden chunks are distinguishable from records without hidden
+       chunks and conversations with missing records are distinguishable
+       from complete conversations.
+
+   4.  For every non-hidden record, the originator is known
+
+   5.  The timestamps inside the proof provide tight upper and lower
+       bounds on the Generator's time during the conversation.
+
+10.3.  Adversarial model
+
+   As previously explained, when analyzing the security of the TLS-N
+   extension, one must consider:
+
+   o  The Requester can be malicious, specifically when it tries to
+      forge the proof (in particular, when forging the plaintext).  If
+      successful, it violates the 1st, 3rd, 4th and 5th properties.
+
+   o  The Verifier can be malicious, specifically when it tries to find
+      information about the hidden pieces.  If successful, it violates
+      the 2nd property.
+
+10.4.  Security analysis
+
+   In this section, a brief security analysis of TLS-N is presented.
+   For the full analysis and the proofs, please refer to the TLS-N
+   Research Paper [tlsn_paper].
+
+   1.  The unforgeability of the signature scheme and the collision
+       resistance of H(), ensures that the additional data (parameters
+       and timestamps) and the hash chain output are unforgeable.  The
+       unforgeability of the hash chain inputs, namely the Merkle
+       hashes, reduces to the collision resistance of H().  Given all
+       these, the adapted CES-Unforgeability is satisfied for each
+       record according to the proof provided by Steinfeld et al [CES]
+       for generic documents (the difference among records and documents
+       is irrelevant for the proof).
+
+   2.  The hiding property of C() is sufficient to state the no
+       information is leaked about the hidden parts, as long as the
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 34]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+       salts are pseudorandom, independent and secret.  Salts are
+       pseudorandom due to the properties of E() and they are
+       independent as for each record they are derived from an
+       independent salt secret.  The only way to break the secrecy of
+       the salts would be revealing the TLS traffic secret.  However,
+       the TLS traffic secret is not leaked as it is only input to E(),
+       which due to its properties does not leak it ([RFC5869]).
+
+   3.  The structure of the hidden information is also reveald by the
+       proof.  A hidden chunk is observable due to the definition of a
+       record and its length is known due its position, the chunk size
+       and the record size (the Verifier learns all these values from
+       the proof).  If the first records of a conversation is not
+       included, the second part of the proof must start with a Hash
+       Chain ProofNode.  If a record in the middle of a conversation is
+       not included, the proof will carry its Merkle Hash ProofNode.
+
+   4.  For non-hidden records, the originator is known, because their
+       Hash Chain element contains the originator information.  The Hash
+       Chain element is unforgeable, as previously observed.
+
+   5.  Similarly, the timestamps are also unforgeable, meaning that they
+       provide tight upper and lower bounds on the Generator's time
+       during the conversation.
+
+11.  References
+
+11.1.  Normative References
+
+   [I-D.ietf-tls-tls13]
+              Rescorla, E., "The Transport Layer Security (TLS) Protocol
+              Version 1.3", draft-ietf-tls-tls13-26 (work in progress),
+              March 2018.
+
+   [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
+              Requirement Levels", BCP 14, RFC 2119,
+              DOI 10.17487/RFC2119, March 1997, <https://www.rfc-
+              editor.org/info/rfc2119>.
+
+   [RFC5226]  Narten, T. and H. Alvestrand, "Guidelines for Writing an
+              IANA Considerations Section in RFCs", RFC 5226,
+              DOI 10.17487/RFC5226, May 2008, <https://www.rfc-
+              editor.org/info/rfc5226>.
+
+   [RFC5869]  Krawczyk, H. and P. Eronen, "HMAC-based Extract-and-Expand
+              Key Derivation Function (HKDF)", RFC 5869,
+              DOI 10.17487/RFC5869, May 2010, <https://www.rfc-
+              editor.org/info/rfc5869>.
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 35]
+
+Internet-Draft                    TLS-N                      August 2018
+
+
+11.2.  Informative References
+
+   [CES]      Steinfeld et al., , ""Content extraction signatures" in
+              Proceedings of the 4th International Conference Seoul on
+              Information Security and Cryptology", 2002,
+              <http://dl.acm.org/citation.cfm?id=646283.687991>.
+
+   [Merkle]   Merkle, Ralph C., , "A Digital Signature Based on a
+              Conventional Encryption Function. In: Pomerance C. (eds)
+              Advances in Cryptology - CRYPTO '87. CRYPTO 1987. Lecture
+              Notes in Computer Science, vol 293. Springer, Berlin,
+              Heidelberg", 1988,
+              <https://doi.org/10.1007/3-540-48184-2_32>.
+
+   [tlsn_paper]
+              Ritzdorf H., , Wuest K., , Gervais A., , Felley G., , and
+              Capkun S., "TLS-N: Non-repudiation over TLS Enabling
+              Ubiquitous Content Signing", 2017, <https://tls-n.org/tls-
+              n.pdf>.
+
+Appendix A.  Title of the appendix
+
+   This becomes an Appendix.
+
+Authors' Addresses
+
+   Hubert Ritzdorf
+   ETH Zurich
+
+   Email: hubert@chainsecurity.com
+
+
+   Karl Wuest
+   ETH Zurich
+
+   Email: karl.wuest@inf.ethz.ch
+
+
+   Fabio De Rubeis
+   ETH Zurich
+
+   Email: fabioder@student.ethz.ch
+
+
+
+
+
+
+
+
+
+Ritzdorf, et al.        Expires February 4, 2019               [Page 36]

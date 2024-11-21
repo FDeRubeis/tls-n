@@ -2014,6 +2014,52 @@ int SSL_CIPHER_get_digest_nid(const SSL_CIPHER *c);
 int SSL_bytes_to_cipher_list(SSL *s, const unsigned char *bytes, size_t len,
                              int isv2format, STACK_OF(SSL_CIPHER) **sk,
                              STACK_OF(SSL_CIPHER) **scsvs);
+/*TLS-N functions*/
+#define MINIMUM_CHUNK_SIZE 1
+#define MAXIMUM_CHUNK_SIZE 16384
+#define MINIMUM_SALT_SIZE 16
+#define MAXIMUM_SALT_SIZE 32
+#define MAXIMUM_TLSN_VERSION 0
+#define MAX_ORD_VECTOR_LEN 8192 /*it is the maximum ordering vector length in bits*/
+
+#define INCLUDE_CERT_CHAIN 0
+#define OMIT_CERT_CHAIN 1
+
+/*Getters and setters for  chunk size and salt size*/
+int SSL_CTX_set_chunk_size(SSL_CTX *ctx,size_t value);
+size_t SSL_CTX_get_chunk_size(SSL_CTX *ctx);
+int SSL_set_chunk_size(SSL *s,size_t value);
+size_t SSL_get_chunk_size(SSL *s);
+int SSL_CTX_set_salt_size(SSL_CTX *ctx,size_t value);
+size_t SSL_CTX_get_salt_size(SSL_CTX *ctx);
+int SSL_set_salt_size(SSL *s,size_t value);
+size_t SSL_get_salt_size(SSL *s);
+
+
+/* Evidence and proof managing*/
+
+int SSL_CTX_set_tlsn_extension_client(SSL_CTX *ctx);
+int SSL_CTX_set_tlsn_extension_server(SSL_CTX *ctx);
+int SSL_get_negotiated(SSL *s);
+uint8_t SSL_CTX_get_tlsn_version(SSL_CTX *ctx);
+uint8_t SSL_get_tlsn_version(SSL *s);
+int SSL_get_tlsn_sent_responses(SSL *s);
+int SSL_get_tlsn_received_responses(SSL *s);
+int SSL_tlsn_request_evidence(SSL *s, int option);
+int SSL_tlsn_receive_response(SSL *s);
+int SSL_tlsn_hide_sensitive_chunks(SSL *s, int option, int16_t **sens_mtrx, size_t row_num);
+int SSL_tls_get_proof_string(SSL *s, unsigned char ** proof_str_ptr, size_t *proof_size_ptr);
+int SSL_tlsn_verify_with_certchain(SSL *s, unsigned char *proof_str, size_t proof_size, uint64_t min_start_time, uint64_t max_start_time, uint64_t min_stop_time, uint64_t max_stop_time, uint64_t max_conv_duration);
+int SSL_tlsn_verify_no_certchain(EVP_PKEY *generator_pubkey, unsigned char *proof_str, size_t proof_size, uint64_t min_start_time, uint64_t max_start_time, uint64_t min_stop_time, uint64_t max_stop_time, uint64_t max_conv_duration);
+
+/* Struct to save the information necessary for proof generation */
+typedef struct tlsn_client_recording_str{
+    unsigned char* plaintext;
+    size_t plaintext_size;
+    unsigned char *merkle_hash;
+    unsigned char* salt_secret;
+} TLSN_CLIENT_RECORDING;
+
 
 /* TLS extensions functions */
 __owur int SSL_set_session_ticket_ext(SSL *s, void *ext_data, int ext_len);

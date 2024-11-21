@@ -1,0 +1,120 @@
+=pod
+
+=head1 NAME
+
+
+SSL_CTX_set_chunk_size,
+SSL_CTX_get_chunk_size,
+SSL_set_chunk_size,
+SSL_get_chunk_size,
+SSL_CTX_set_salt_size,
+SSL_CTX_get_salt_size,
+SSL_set_salt_size,
+SSL_get_salt_size,
+SSL_CTX_set_tlsn_extension_client,
+SSL_CTX_set_tlsn_extension_server,
+SSL_get_negotiated,
+SSL_get_tlsn_sent_responses,
+SSL_get_tlsn_received_responses,
+SSL_tlsn_request_evidence,
+SSL_tlsn_receive_response,
+SSL_tlsn_hide_sensitive_chunks,
+SSL_tls_get_proof_string,
+SSL_tlsn_verify_with_certchain,
+SSL_tlsn_verify_no_certchain,
+
+=head1 SYNOPSIS
+
+/*Getters and setters for chunk size and salt size*/
+
+int SSL_CTX_set_chunk_size(SSL_CTX *ctx,size_t value);
+size_t SSL_CTX_get_chunk_size(SSL_CTX *ctx);
+int SSL_set_chunk_size(SSL *s,size_t value);
+size_t SSL_get_chunk_size(SSL *s);
+int SSL_CTX_set_salt_size(SSL_CTX *ctx,size_t value);
+size_t SSL_CTX_get_salt_size(SSL_CTX *ctx);
+int SSL_set_salt_size(SSL *s,size_t value);
+size_t SSL_get_salt_size(SSL *s);
+
+
+/* Extension managing*/
+
+int SSL_CTX_set_tlsn_extension_client(SSL_CTX *ctx);
+int SSL_CTX_set_tlsn_extension_server(SSL_CTX *ctx);
+int SSL_get_negotiated(SSL *s);
+int SSL_get_tlsn_sent_responses(SSL *s);
+int SSL_get_tlsn_received_responses(SSL *s);
+int SSL_tlsn_request_evidence(SSL *s, int option);
+int SSL_tlsn_receive_response(SSL *s);
+int SSL_tlsn_hide_sensitive_chunks(SSL *s, int option, int16_t **sens_mtrx, size_t row_num);
+int SSL_tls_get_proof_string(SSL *s, unsigned char ** proof_str_ptr, size_t *proof_size_ptr);
+int SSL_tlsn_verify_with_certchain(SSL *s, unsigned char *proof_str, size_t proof_size, uint64_t min_start_time, uint64_t max_start_time, uint64_t min_stop_time, uint64_t max_stop_time, uint64_t max_conv_duration);
+int SSL_tlsn_verify_no_certchain(EVP_PKEY *generator_pubkey, unsigned char *proof_str, size_t proof_size, uint64_t min_start_time, uint64_t max_start_time, uint64_t min_stop_time, uint64_t max_stop_time, uint64_t max_conv_duration);
+
+=head1 DESCRIPTION
+
+The getters and setters are used to control the TLS-N paramters: the salt size and the chunk size. The parameters must be set before the handhsake, otherwise their default value is used. The default value for the chunk size is the maximum length of a record's plaintext, whereas the defaul value of the salt size is the minimum accepted salt size in TLS-N. The SSL_CTX functions apply to the B<SSL_CTX> object, and to all the B<SSL> object created out of it. The SSL functions only apply to the single B<SSL> object. 
+
+SSL_CTX_set_tlsn_extension_client enables TLS-N for the client. It must be called on client-side before the handshake.
+
+SSL_CTX_set_tlsn_extension_server enables TLS-N for the server. It must be called on server-side before the handshake.
+
+SSL_get_negotiated returns 1 if TLS-N has been successfully negotiated for the current session. Must be called after the handshake, because negotiation takes place at that time. 
+
+SSL_get_tlsn_sent_responses returns the number of tlsn-responses sent in the session. Note: if called by the client, this function will always return 0, since only the server sends tlsn-responses.  SSL_get_tlsn_received_responses does the same for the received tlsn-responses. If called by the server, it will always return 0.
+
+SSL_tlsn_request_evidence is called by the client and it sends the tlsn-request to the server. The server will send the tlsn-response automatically. The option can be INCLUDE_CERT_CHAIN or OMIT_CERT_CHAIN. In the first case, when the client receives the tlsn-response, it will build a proof including the server's certificate chain. In the second case, of course, the certificate chain will be omitted.
+
+SSL_tlsn_receive_response must be called after SSL_tlsn_request_evidence to receive the tlsn-response. SSL_tlsn_receive_response also builds a full-plaintext proof (no hidden chunks), including or omitting the server's certificate chain based on the option provided during the request.
+
+SSL_tlsn_hide_sensitive_chunks updates the proof by hiding chunks according to the indications of the sensitive matrix. The sensitive matrix has one row for each exchanged record, and each row is formed as following:
+ - each element of the row indicates the index of a hidden chunk in the record
+ - when a -1 is met, the row has terminated
+ - a -1 can also be at the beginning of the row, meaning that no chunks are hidden in that row
+ - if a -2 is at the beginning of the row, it means that all the records are hidden
+Example of sensitive matrix:
+0 2 -1
+-1
+-2 
+3 4 -1
+This sensitvie matrix indicates that four records have been exchanged in the session. In the 0th, the chunks 0 and 2 must be hidden. The 1st has no hidden chunks. The 2nd is completely hidden. In the 4th, chunks 3 and 4 must be hidden.
+SSL_tlsn_hide_sensitive_chunks also requires an option. As in SSL_tlsn_request_evidence can be INCLUDE_CERT_CHAIN or OMIT_CERT_CHAIN, based on whether the user wants to include the certificate chain in the proof or not.
+
+SSL_tls_get_proof_string sets *proof_str_ptr to point at the proof. The size of the proof will be written in the memory pointed by proof_size_ptr.
+ 
+SSL_tlsn_verify_with_certchain and SSL_tlsn_verify_no_certchain verify the proof at proof_str. min_start_time and max_start_time indicate the time costraints for the begin-of-session time in the proof and they are expressed in microseconds after the epoch. min_stop_time and max_stop_time do the same for the end-of-session time. max_conv_duration indicates the maximum accepted duration in microseconds. SSL_tlsn_verify_no_certchain requires the public key of the proof's generator.  
+
+=head1 RETURN VALUES
+
+The setters of chunk and salt size return 1 upon success and 0 upon failure.
+
+The getters of chunk and salt size return the corresponding value.
+
+SSL_get_negotiated returns 1 if TLS-N is negotiated, 0 if it isn't. 
+
+SSL_get_tlsn_sent_responses and SSL_get_tlsn_received_responses return their corresponding value.
+
+SSL_tlsn_receive_response returns 0 upon success and -1 upon failure.
+
+All the other functions return 1 upon success and 0 or -1 upon failure.
+
+
+=head1 SEE ALSO
+
+L<SSL_read(3)>,
+L<SSL_write(3)>,
+
+=head1 HISTORY
+
+These functions were first added to OpenSSL x.x.x
+
+=head1 COPYRIGHT
+
+Copyright 2006-2018 The OpenSSL Project Authors. All Rights Reserved.
+
+Licensed under the OpenSSL license (the "License").  You may not use
+this file except in compliance with the License.  You can obtain a copy
+in the file LICENSE in the source distribution or at
+L<https://www.openssl.org/source/license.html>.
+
+=cut

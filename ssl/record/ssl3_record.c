@@ -336,6 +336,7 @@ int ssl3_get_record(SSL *s)
                 if (SSL_IS_TLS13(s)
                         && s->enc_read_ctx != NULL
                         && thisrr->type != SSL3_RT_APPLICATION_DATA
+                        && thisrr->type != SSL3_RT_TLSN_MESSAGE
                         && (thisrr->type != SSL3_RT_CHANGE_CIPHER_SPEC
                             || !SSL_IS_FIRST_HANDSHAKE(s))) {
                     SSLfatal(s, SSL_AD_UNEXPECTED_MESSAGE,
@@ -685,7 +686,7 @@ int ssl3_get_record(SSL *s)
             size_t end;
 
             if (thisrr->length == 0
-                    || thisrr->type != SSL3_RT_APPLICATION_DATA) {
+                    || (thisrr->type != SSL3_RT_APPLICATION_DATA &&  thisrr->type != SSL3_RT_TLSN_MESSAGE)) {
                 SSLfatal(s, SSL_AD_UNEXPECTED_MESSAGE, SSL_F_SSL3_GET_RECORD,
                          SSL_R_BAD_RECORD_TYPE);
                 return -1;
@@ -700,6 +701,7 @@ int ssl3_get_record(SSL *s)
             thisrr->type = thisrr->data[end];
             if (thisrr->type != SSL3_RT_APPLICATION_DATA
                     && thisrr->type != SSL3_RT_ALERT
+                    && thisrr->type != SSL3_RT_TLSN_MESSAGE
                     && thisrr->type != SSL3_RT_HANDSHAKE) {
                 SSLfatal(s, SSL_AD_UNEXPECTED_MESSAGE, SSL_F_SSL3_GET_RECORD,
                          SSL_R_BAD_RECORD_TYPE);

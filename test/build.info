@@ -46,7 +46,7 @@ INCLUDE_MAIN___test_libtestutil_OLB = /INCLUDE=MAIN
           x509_time_test x509_dup_cert_test x509_check_cert_pkey_test \
           recordlentest drbgtest sslbuffertest \
           time_offset_test pemtest ssl_cert_table_internal_test ciphername_test \
-          servername_test ocspapitest rsa_mp_test fatalerrtest tls13ccstest 
+          servername_test ocspapitest rsa_mp_test fatalerrtest tls13ccstest tls13tlsntest
 
   SOURCE[aborttest]=aborttest.c
   INCLUDE[aborttest]=../include
@@ -468,6 +468,10 @@ INCLUDE_MAIN___test_libtestutil_OLB = /INCLUDE=MAIN
   SOURCE[asn1_time_test]=asn1_time_test.c
   INCLUDE[asn1_time_test]=.. ../include
   DEPEND[asn1_time_test]=../libcrypto libtestutil.a
+
+  SOURCE[tls13tlsntest]=tls13tlsntest.c ssltestlib.c
+  INCLUDE[tls13tlsntest]=.. ../include
+  DEPEND[tls13tlsntest]=../libcrypto ../libssl libtestutil.a
 
   # We disable this test completely in a shared build because it deliberately
   # redefines some internal libssl symbols. This doesn't work in a non-shared

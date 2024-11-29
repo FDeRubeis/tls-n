@@ -2,7 +2,7 @@
 
 TLS-N [1] is an extension of the TLS protocol developed at ETH Zurich that guarantees the non-repudiation of the TLS session. This repository contains an implementation of the TLS-N extension for OpenSSL [2], a popular tool used for securing internet connections.
 
-In order to view the specific code changes made to implement TLS-N, please see [the relevant diff view](url-to-diff-view).
+In order to view the specific code changes made to implement TLS-N, please see [the relevant diff view](https://github.com/FDeRubeis/tls-n/commit/9a49733563abc9f6290eb3e2a4f135c162aef914).
 
 ## TLS-N
 
@@ -42,9 +42,9 @@ An example of a client and server application that uses TLS-N can be found in th
 
 ### The implementation
 
-This repository contains an implementation of the TLS-N extension for the OpenSSL project. The TLS-N specific code changes can be seen in this [diff view](url-to-diff-view).
+This repository contains an implementation of the TLS-N extension for the OpenSSL project. The TLS-N specific code changes can be seen in this [diff view](https://github.com/FDeRubeis/tls-n/commit/9a49733563abc9f6290eb3e2a4f135c162aef914).
 
-The functions implementing the main logic of the TLS-N extension can be found in the dedicated source file: [tls13_tlsn.c](https://github.com/FDeRubeis/tls-n/blob/master/ssl/tls13_tlsn.c). For details on how they are integrated in the OpenSSL's workflow, please see [rec-layer_s3.c](url-to-diff-view-rec-layer_s3.c) and [ssl3_record.c](url-to-diff-view-ssl3_record.c)
+The functions implementing the main logic of the TLS-N extension can be found in the dedicated source file: [tls13_tlsn.c](https://github.com/FDeRubeis/tls-n/blob/master/ssl/tls13_tlsn.c). For details on how they are integrated in the OpenSSL's workflow, please see [rec-layer_s3.c](https://github.com/FDeRubeis/tls-n/commit/9a49733563abc9f6290eb3e2a4f135c162aef914#diff-9ad003bc718a126e8376b7542b345cb18ac87cc757304951bbac5f5579d2fbdd) and [ssl3_record.c](https://github.com/FDeRubeis/tls-n/commit/9a49733563abc9f6290eb3e2a4f135c162aef914#diff-a4131b6fe8ab7af35f45112ef26d47767c8b35f76466c1468e8cad0f381d1ef8)
 
 Note: although this repository has been forked from OpenSSL, the history of the upstream OpenSSL repository is missing due to a mistake. Unfortunately, as of 2024, the original branch from which this fork was created is no longer accessible.
 
